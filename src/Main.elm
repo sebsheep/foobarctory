@@ -15,6 +15,7 @@ type alias Robot =
     , action : Maybe Action
     , lastProduced : Int
     , foobarsForSell : List FooBarId
+    , lockAction : Bool
     }
 
 
@@ -65,6 +66,7 @@ type Msg
     | AddFooBar RobotId FooBarId
     | RemoveFooBar RobotId FooBarId
     | SoldFooBar RobotId Int
+    | LockAction RobotId
 
 
 robotMoneyCost : Int
@@ -138,21 +140,37 @@ update msg model =
 
         -- FOO PROCESS
         FooCreated ((FooId robotId _) as fooId) ->
-            ( { model
-                | foos = fooId :: model.foos
-                , robots = rest robotId model.robots
-              }
-            , Cmd.none
-            )
+            let
+                newModel =
+                    { model
+                        | foos = fooId :: model.foos
+                        , robots = rest robotId model.robots
+                    }
+            in
+            if getRobotLock robotId model.robots && List.length model.foos < 20 then
+                update (ActionClicked robotId CreatingFoo) newModel
+
+            else
+                ( newModel
+                , Cmd.none
+                )
 
         -- BAR PROCESS
         BarCreated ((BarId robotId _) as barId) ->
-            ( { model
-                | bars = barId :: model.bars
-                , robots = rest robotId model.robots
-              }
-            , Cmd.none
-            )
+            let
+                newModel =
+                    { model
+                        | bars = barId :: model.bars
+                        , robots = rest robotId model.robots
+                    }
+            in
+            if getRobotLock robotId model.robots && List.length model.bars < 20 then
+                update (ActionClicked robotId CreatingBar) newModel
+
+            else
+                ( newModel
+                , Cmd.none
+                )
 
         GotBarCreationTime barId time ->
             ( model
@@ -163,27 +181,49 @@ update msg model =
             )
 
         -- FOO BAR PROCESS
-        GotFooBarSuccess ((FooBarId robotId _ _ _) as fooBarId) True ->
-            ( { model
-                | robots = rest robotId model.robots
-                , foobars = fooBarId :: model.foobars
-              }
-            , Cmd.none
-            )
-
         FooBarDelayElapsed foobarId ->
             ( model
             , Random.generate (GotFooBarSuccess foobarId)
                 (Random.weighted ( 0.6, True ) [ ( 0.4, False ) ])
             )
 
+        GotFooBarSuccess ((FooBarId robotId _ _ _) as fooBarId) True ->
+            let
+                newModel =
+                    { model
+                        | robots = rest robotId model.robots
+                        , foobars = fooBarId :: model.foobars
+                    }
+            in
+            if getRobotLock robotId model.robots then
+                case ( model.foos, model.bars ) of
+                    ( newFooId :: _, newBarId :: _ ) ->
+                        update (ActionClicked robotId (CreatingFooBar newFooId newBarId)) newModel
+
+                    _ ->
+                        ( newModel, Cmd.none )
+
+            else
+                ( newModel, Cmd.none )
+
         GotFooBarSuccess (FooBarId robotId _ _ barId) False ->
-            ( { model
-                | robots = rest robotId model.robots
-                , bars = barId :: model.bars
-              }
-            , Cmd.none
-            )
+            let
+                newModel =
+                    { model
+                        | robots = rest robotId model.robots
+                        , bars = barId :: model.bars
+                    }
+            in
+            if getRobotLock robotId model.robots then
+                case ( model.foos, model.bars ) of
+                    ( newFooId :: _, newBarId :: _ ) ->
+                        update (ActionClicked robotId (CreatingFooBar newFooId newBarId)) newModel
+
+                    _ ->
+                        ( newModel, Cmd.none )
+
+            else
+                ( newModel, Cmd.none )
 
         AddFooBar robotId foobar ->
             ( { model
@@ -205,6 +245,13 @@ update msg model =
             ( { model
                 | robots = rest robotId model.robots
                 , balance = model.balance + fooBarCount * fooBarPrice
+              }
+            , Cmd.none
+            )
+
+        LockAction robotId ->
+            ( { model
+                | robots = setRobotLock robotId model.robots
               }
             , Cmd.none
             )
@@ -314,12 +361,35 @@ rest robotId robots =
             )
 
 
+getRobotLock : RobotId -> List Robot -> Bool
+getRobotLock robotId robots =
+    robots
+        |> List.filter (\robot -> robot.id == robotId)
+        |> List.map .lockAction
+        |> List.head
+        |> Maybe.withDefault False
+
+
+setRobotLock : RobotId -> List Robot -> List Robot
+setRobotLock robotId robots =
+    robots
+        |> List.map
+            (\robot ->
+                if robot.id == robotId then
+                    { robot | lockAction = not robot.lockAction }
+
+                else
+                    robot
+            )
+
+
 initRobot : Int -> Robot
 initRobot id =
     { id = RobotId id
     , action = Nothing
     , lastProduced = 0
     , foobarsForSell = []
+    , lockAction = False
     }
 
 
@@ -471,6 +541,15 @@ viewActions model robot =
                         , HA.disabled True
                         ]
                         [ H.text "+" ]
+            ]
+        , H.label []
+            [ H.input
+                [ HA.type_ "checkbox"
+                , HA.checked robot.lockAction
+                , HE.onClick (LockAction robot.id)
+                ]
+                []
+            , H.text " Lock action"
             ]
         ]
 
