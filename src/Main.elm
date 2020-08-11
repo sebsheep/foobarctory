@@ -368,7 +368,7 @@ viewStock model =
 
            else
             H.button
-                [ HA.class "rounded-md bg-gray-400"
+                [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
                 , HA.disabled True
                 ]
                 [ H.text "BUY ROBOT" ]
@@ -424,7 +424,7 @@ viewActions model robot =
 
                 _ ->
                     H.button
-                        [ HA.class "rounded-md bg-gray-400"
+                        [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
                         , HA.disabled True
                         ]
                         [ H.text "BUILD FOO-BAR" ]
@@ -440,7 +440,7 @@ viewActions model robot =
 
                 _ ->
                     H.button
-                        [ HA.class "rounded-md bg-gray-400 px-1"
+                        [ HA.class "rounded-md bg-gray-400 px-1 cursor-not-allowed"
                         , HA.disabled True
                         ]
                         [ H.text "-" ]
@@ -453,7 +453,7 @@ viewActions model robot =
 
               else
                 H.button
-                    [ HA.class "rounded-md bg-gray-400"
+                    [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
                     , HA.disabled True
                     ]
                     [ H.text "SELL 0 FOO-BARS" ]
@@ -467,7 +467,7 @@ viewActions model robot =
 
                 _ ->
                     H.button
-                        [ HA.class "rounded-md bg-gray-400 px-1"
+                        [ HA.class "rounded-md bg-gray-400 px-1 cursor-not-allowed"
                         , HA.disabled True
                         ]
                         [ H.text "+" ]
