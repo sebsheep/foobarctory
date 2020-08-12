@@ -359,7 +359,7 @@ viewStock model =
          , H.text <| "FOO COUNT: " ++ String.fromInt (List.length model.foos)
          , H.text <| "BAR COUNT: " ++ String.fromInt (List.length model.bars)
          , H.text <| "FOO-BAR COUNT: " ++ String.fromInt (List.length model.foobars)
-         , if model.balance >= robotMoneyCost && List.length model.foos > robotFooCost then
+         , if model.balance >= robotMoneyCost && List.length model.foos >= robotFooCost then
             H.button
                 [ HA.class "rounded-md bg-green-500"
                 , HE.onClick BuyRobotClicked
@@ -370,6 +370,7 @@ viewStock model =
             H.button
                 [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
                 , HA.disabled True
+                , HA.title <| "You need €" ++ String.fromInt robotMoneyCost ++ " and " ++ String.fromInt robotFooCost ++ " foos."
                 ]
                 [ H.text "BUY ROBOT" ]
          ]
