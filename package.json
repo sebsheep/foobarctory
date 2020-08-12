@@ -7,7 +7,7 @@
   "scripts": {
     "build": "elm make src/Main.elm --output=main.js --optimize",
     "debug": "elm-live src/Main.elm --port=8000 --dir=./ -- --output=main.js --debug",
-    "live": "elm-live src/Main.elm --port=8000 --dir=./ -- --output=main.js"
+    "live": "elm-live src/Main.elm --hot --port=8000 --dir=./ -- --output=main.js"
   },
   "repository": {
     "type": "git",

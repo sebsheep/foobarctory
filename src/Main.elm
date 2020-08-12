@@ -87,9 +87,14 @@ maxSellingFoobarCount =
     5
 
 
+numberRobotToWin : Int
+numberRobotToWin =
+    30
+
+
 initModel : Model
 initModel =
-    { robots = [ initRobot 2, initRobot 1 ]
+    { robots = List.map initRobot (List.reverse <| List.range 1 10) -- [ initRobot 2, initRobot 1 ]
     , balance = 0
     , foos = []
     , bars = []
@@ -340,140 +345,217 @@ addRobot robots =
 
 view : Model -> Html Msg
 view model =
-    if List.length model.robots >= 30 then
+    if List.length model.robots >= numberRobotToWin then
         H.div [ HA.class "font-bold text-2xl" ]
             [ H.text "CONGRATS!" ]
 
     else
-        H.div [ HA.class "flex flex-row space-x-8 mt-4" ]
-            [ H.div [ HA.class "flex flex-col space-y-4 ml-4" ]
-                (List.map (viewRobot model) model.robots)
-            , viewStock model
+        H.div [ HA.class "flex flex-col pt-4 h-screen min-h-0" ]
+            [ viewStock model
+            , viewBuyRobot model
+            , H.div [ HA.class "flex flex-col mt-8 pt-4 overflow-auto border-t border-gray-400 flex-grow" ]
+                [ H.div [ HA.class "flex flex-row flex-wrap pb-8" ]
+                    (List.map (viewRobot model) (List.reverse model.robots))
+                ]
             ]
 
 
 viewStock : Model -> Html Msg
 viewStock model =
-    H.div [ HA.class "flex flex-col" ]
-        ([ H.text <| String.fromInt model.balance ++ "€"
-         , H.text <| "FOO COUNT: " ++ String.fromInt (List.length model.foos)
-         , H.text <| "BAR COUNT: " ++ String.fromInt (List.length model.bars)
-         , H.text <| "FOO-BAR COUNT: " ++ String.fromInt (List.length model.foobars)
-         , if model.balance >= robotMoneyCost && List.length model.foos >= robotFooCost then
-            H.button
-                [ HA.class "rounded-md bg-green-500"
-                , HE.onClick BuyRobotClicked
-                ]
-                [ H.text "BUY ROBOT" ]
+    H.div [ HA.class "flex flex-row" ]
+        [ viewResourceCard
+            { iconName = "euro_symbol"
+            , hardColor = "yellow-700"
+            , softColor = "yellow-200"
+            , title = "MONEY"
+            , value = "€" ++ String.fromInt model.balance
+            }
+        , viewResourceCard
+            { iconName = "widgets"
+            , hardColor = "teal-700"
+            , softColor = "teal-200"
+            , title = "FOO"
+            , value = String.fromInt (List.length model.foos)
+            }
+        , viewResourceCard
+            { iconName = "device_hub"
+            , hardColor = "red-700"
+            , softColor = "red-200"
+            , title = "BAR"
+            , value = String.fromInt (List.length model.bars)
+            }
+        , viewResourceCard
+            { iconName = "science"
+            , hardColor = "green-700"
+            , softColor = "green-200"
+            , title = "FOO-BAR"
+            , value = String.fromInt (List.length model.foobars)
+            }
+        ]
 
-           else
-            H.button
-                [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
-                , HA.disabled True
-                , HA.title <| "You need €" ++ String.fromInt robotMoneyCost ++ " and " ++ String.fromInt robotFooCost ++ " foos."
+
+viewBuyRobot : Model -> Html Msg
+viewBuyRobot model =
+    let
+        remainingRobots =
+            numberRobotToWin - List.length model.robots
+
+        robotStr =
+            if remainingRobots > 1 then
+                "ROBOTS"
+
+            else
+                "ROBOT"
+    in
+    H.div [ HA.class "flex flex-col items-center mt-16" ]
+        [ H.div [ HA.class "flex flex-row justify-center space-x-16 items-center" ]
+            [ H.div [ HA.class "flex flex-col items-end leading-none" ]
+                [ H.span [ HA.class "font-bold text-gray-500 text-sm" ] [ H.text "YOU ARE" ]
+                , H.span [ HA.class "font-bold text-green-700 text-4xl" ] [ H.text (String.fromInt remainingRobots) ]
+                , H.span [ HA.class "font-bold text-gray-500 text-sm" ] [ H.text <| robotStr ++ " AWAY FROM VICTORY" ]
                 ]
-                [ H.text "BUY ROBOT" ]
-         ]
-            |> List.map (H.div [] << List.singleton)
-        )
+            , H.div [ HA.class "flex flex-col" ] <|
+                if model.balance >= robotMoneyCost && List.length model.foos >= robotFooCost then
+                    [ activeButton "BUY ROBOT" BuyRobotClicked
+                    , H.span [ HA.class "text-green-500 text-sm invisible" ]
+                        [ H.text <| "You need €" ++ String.fromInt robotMoneyCost ++ " and " ++ String.fromInt robotFooCost ++ " foos."
+                        ]
+                    ]
+
+                else
+                    [ inactiveButton "BUY ROBOT"
+                    , H.span [ HA.class "text-green-500 text-sm" ]
+                        [ H.text <| "You need €" ++ String.fromInt robotMoneyCost ++ " and " ++ String.fromInt robotFooCost ++ " foos."
+                        ]
+                    ]
+            ]
+        ]
+
+
+viewResourceCard :
+    { iconName : String
+    , hardColor : String
+    , softColor : String
+    , title : String
+    , value : String
+    }
+    -> Html msg
+viewResourceCard r =
+    H.div [ HA.class "h-40 w-1/4 p-4" ]
+        [ H.div
+            [ HA.class "flex flex-row rounded-md p-10 space-x-16 shadow-xl"
+
+            -- this way of dealing with Tailwind properties are not very good
+            -- since we cannot safely "purge" the CSS file
+            , HA.class <| "bg-" ++ r.softColor
+            , HA.class <| "border-b-4 border-" ++ r.hardColor
+            ]
+            [ viewIcon [ HA.class <| "rounded-full text-white p-6 bg-" ++ r.hardColor ] r.iconName
+            , H.div [ HA.class "flex flex-col mt-4" ]
+                [ H.div [ HA.class "text-gray-600 font-bold text-sm" ] [ H.text r.title ]
+                , H.div [ HA.class "font-bold text-2xl" ] [ H.text r.value ]
+                ]
+            ]
+        ]
 
 
 viewRobot : Model -> Robot -> Html Msg
 viewRobot model robot =
-    H.div [ HA.class "flex flex-col space-y-4 p-4 border rounded-md h-40" ]
-        [ H.h2 [ HA.class "font-bold" ]
-            [ H.text <| "Foobarer n°" ++ showRobotId robot.id ]
-        , case robot.action of
-            Nothing ->
-                viewActions model robot
+    H.div [ HA.class "w-1/4 px-4 pt-8" ]
+        [ H.div [ HA.class "flex flex-col space-y-4 p-4 border rounded-md h-48 shadow-md" ]
+            [ H.h2 [ HA.class "font-bold" ]
+                [ H.text <| "Foobarer n°" ++ showRobotId robot.id ]
+            , case robot.action of
+                Nothing ->
+                    viewActions model robot
 
-            Just CreatingFoo ->
-                H.text "Mining Foo ..."
+                Just CreatingFoo ->
+                    H.text "Mining Foo ..."
 
-            Just CreatingBar ->
-                H.text <| "Mining bar ..."
+                Just CreatingBar ->
+                    H.text <| "Mining bar ..."
 
-            Just (CreatingFooBar fooId barId) ->
-                H.text <| "Creating foobar from " ++ showFooId fooId ++ " and " ++ showBarId barId ++ "..."
+                Just (CreatingFooBar fooId barId) ->
+                    H.text <| "Creating foobar from " ++ showFooId fooId ++ " and " ++ showBarId barId ++ "..."
 
-            Just (SellingFooBar fooBars) ->
-                H.text <| "Selling foobars: " ++ String.join "," (List.map showFooBarId fooBars) ++ "..."
+                Just (SellingFooBar fooBars) ->
+                    H.text <| "Selling foobars: " ++ String.join "," (List.map showFooBarId fooBars) ++ "..."
+            ]
         ]
 
 
 viewActions : Model -> Robot -> Html Msg
 viewActions model robot =
     H.div [ HA.class "flex flex-col space-y-4 text-sm" ]
-        [ H.div [ HA.class "flex flex-row space-x-4" ]
-            [ H.button
-                [ HA.class "rounded-md bg-green-500"
-                , HE.onClick (ActionClicked robot.id CreatingFoo)
-                ]
-                [ H.text "MINE FOO" ]
-            , H.button
-                [ HA.class "rounded-md bg-green-500"
-                , HE.onClick (ActionClicked robot.id CreatingBar)
-                ]
-                [ H.text "MINE BAR" ]
+        [ H.div [ HA.class "flex flex-row justify-around" ]
+            [ activeButton
+                "MINE FOO"
+                (ActionClicked robot.id CreatingFoo)
+            , activeButton
+                "MINE BAR"
+                (ActionClicked robot.id CreatingBar)
             , case ( model.foos, model.bars ) of
                 ( fooId :: _, barId :: _ ) ->
-                    H.button
-                        [ HA.class "rounded-md bg-green-500"
-                        , HE.onClick (ActionClicked robot.id <| CreatingFooBar fooId barId)
-                        ]
-                        [ H.text "BUILD FOO-BAR" ]
+                    activeButton
+                        "BUILD FOO-BAR"
+                        (ActionClicked robot.id <| CreatingFooBar fooId barId)
 
                 _ ->
-                    H.button
-                        [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
-                        , HA.disabled True
-                        ]
-                        [ H.text "BUILD FOO-BAR" ]
+                    inactiveButton
+                        "BUILD FOO-BAR"
             ]
-        , H.div [ HA.class "flex flex-row space-x-4" ]
+        , H.div [ HA.class "flex flex-row justify-center space-x-4" ]
             [ case robot.foobarsForSell of
                 foobar :: _ ->
-                    H.button
-                        [ HA.class "rounded-md bg-green-500 px-1"
-                        , HE.onClick (RemoveFooBar robot.id foobar)
-                        ]
-                        [ H.text "-" ]
+                    activeButton
+                        "-"
+                        (RemoveFooBar robot.id foobar)
 
                 _ ->
-                    H.button
-                        [ HA.class "rounded-md bg-gray-400 px-1 cursor-not-allowed"
-                        , HA.disabled True
-                        ]
-                        [ H.text "-" ]
+                    inactiveButton
+                        "-"
             , if not <| List.isEmpty robot.foobarsForSell then
-                H.button
-                    [ HA.class "rounded-md bg-green-500"
-                    , HE.onClick (ActionClicked robot.id <| SellingFooBar robot.foobarsForSell)
-                    ]
-                    [ H.text <| "SELL " ++ String.fromInt (List.length robot.foobarsForSell) ++ " FOO-BARS" ]
+                activeButton
+                    ("SELL " ++ String.fromInt (List.length robot.foobarsForSell) ++ " FOO-BARS")
+                    (ActionClicked robot.id <| SellingFooBar robot.foobarsForSell)
 
               else
-                H.button
-                    [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
-                    , HA.disabled True
-                    ]
-                    [ H.text "SELL 0 FOO-BARS" ]
+                inactiveButton
+                    "SELL 0 FOO-BARS"
             , case ( model.foobars, List.length robot.foobarsForSell < maxSellingFoobarCount ) of
                 ( foobar :: _, True ) ->
-                    H.button
-                        [ HA.class "rounded-md bg-green-500 px-1"
-                        , HE.onClick (AddFooBar robot.id foobar)
-                        ]
-                        [ H.text "+" ]
+                    activeButton
+                        "+"
+                        (AddFooBar robot.id foobar)
 
                 _ ->
-                    H.button
-                        [ HA.class "rounded-md bg-gray-400 px-1 cursor-not-allowed"
-                        , HA.disabled True
-                        ]
-                        [ H.text "+" ]
+                    inactiveButton
+                        "+"
             ]
         ]
+
+
+activeButton : String -> msg -> Html msg
+activeButton text msg =
+    H.button
+        [ HA.class "rounded-md bg-green-600 px-5 py-2 text-green-200"
+        , HE.onClick msg
+        ]
+        [ H.text text ]
+
+
+inactiveButton : String -> Html msg
+inactiveButton text =
+    H.button
+        [ HA.class "rounded-md bg-green-100 px-5 py-2 cursor-not-allowed text-green-500"
+        , HA.disabled True
+        ]
+        [ H.text text ]
+
+
+viewIcon : List (H.Attribute msg) -> String -> Html msg
+viewIcon attrs name =
+    H.i (HA.class "material-icons" :: attrs) [ H.text name ]
 
 
 showRobotId : RobotId -> String
