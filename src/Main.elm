@@ -370,7 +370,7 @@ viewStock model =
             H.button
                 [ HA.class "rounded-md bg-gray-400 cursor-not-allowed"
                 , HA.disabled True
-                , HA.title <| "You need " ++ String.fromInt robotMoneyCost ++ "€ and " ++ String.fromInt robotFooCost ++ " foos."
+                , HA.title <| "You need €" ++ String.fromInt robotMoneyCost ++ " and " ++ String.fromInt robotFooCost ++ " foos."
                 ]
                 [ H.text "BUY ROBOT" ]
          ]
