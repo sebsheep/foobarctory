@@ -182,7 +182,7 @@ actionCompleted dev kind =
         CreatingApp coffeeId serverId ->
             ( newDev, { emptyStock | apps = [ AppId dev.id newProduced coffeeId serverId ] } )
 
-        FailingAtCreatingApp coffeeId serverId ->
+        FailingAtCreatingApp _ serverId ->
             ( newDev, { emptyStock | servers = [ serverId ] } )
 
         SellingApp apps ->
@@ -238,8 +238,8 @@ startDevAction dev ( devs, stock, seed ) =
 
                 SellApp ->
                     if not <| List.isEmpty stock.apps then
-                        ( { dev | action = Just { elapsedMs = 0, totalMs = 10 * 1000, kind = SellingApp <| List.take 5 stock.apps } } :: devs
-                        , { stock | apps = List.drop 5 stock.apps }
+                        ( { dev | action = Just { elapsedMs = 0, totalMs = 10 * 1000, kind = SellingApp <| List.take maxSellingAppCount stock.apps } } :: devs
+                        , { stock | apps = List.drop maxSellingAppCount stock.apps }
                         , seed
                         )
 
@@ -349,10 +349,13 @@ view model =
                     [ H.text "CONGRATS!" ]
 
             else
-                H.div [ HA.class "flex flex-col pt-4 h-screen min-h-0" ]
-                    [ viewStock loadedModel.stock
-                    , viewRecruitDev loadedModel
-                    , H.div [ HA.class "flex flex-col mt-8 pt-4 overflow-auto border-t border-gray-400 flex-grow" ]
+                H.div [ HA.class "flex flex-row h-screen min-h-0" ]
+                    [ H.div [ HA.class "flex flex-col overflow-y-auto overflow-x-hidden pt-4 pb-8" ]
+                        [ viewStock loadedModel.stock
+                        , viewDevsCount (List.length loadedModel.devs)
+                        , viewRecruitDev loadedModel
+                        ]
+                    , H.div [ HA.class "flex flex-col overflow-auto flex-grow pt-4" ]
                         [ H.div [ HA.class "flex flex-row flex-wrap pb-8" ]
                             (List.map viewDev (List.reverse loadedModel.devs))
                         ]
@@ -361,7 +364,7 @@ view model =
 
 viewStock : Stock -> Html Msg
 viewStock stock =
-    H.div [ HA.class "flex flex-row" ]
+    H.div [ HA.class "flex flex-col space-y-8" ]
         [ viewResourceCard
             { iconName = "euro_symbol"
             , hardColor = "yellow-700"
@@ -406,37 +409,40 @@ viewRecruitDev model =
             else
                 "DEV"
     in
-    H.div [ HA.class "flex flex-col items-center mt-16" ]
-        [ H.div [ HA.class "flex flex-row justify-center space-x-16 items-center" ]
-            [ H.div [ HA.class "flex flex-col items-end leading-none" ]
-                [ H.span [ HA.class "font-bold text-gray-500 text-sm" ] [ H.text "YOU ARE" ]
-                , H.span [ HA.class "font-bold text-green-700 text-4xl" ] [ H.text (String.fromInt remainingDevs) ]
-                , H.span [ HA.class "font-bold text-gray-500 text-sm" ] [ H.text <| devStr ++ " AWAY FROM VICTORY" ]
+    H.div [ HA.class "flex flex-col items-center px-4 mt-4" ] <|
+        if model.stock.balance >= devMoneyCost && List.length model.stock.coffees >= devCoffeeCost then
+            let
+                stock =
+                    model.stock
+
+                newStock =
+                    { stock
+                        | balance = stock.balance - devMoneyCost
+                        , coffees = List.drop devCoffeeCost stock.coffees
+                    }
+            in
+            [ activeButton "RECRUIT DEV" (RecruitDevClicked newStock)
+            , H.span [ HA.class "text-green-500 text-sm invisible" ]
+                [ H.text <| "You need €" ++ String.fromInt devMoneyCost ++ " and " ++ String.fromInt devCoffeeCost ++ " coffees."
                 ]
-            , H.div [ HA.class "flex flex-col" ] <|
-                if model.stock.balance >= devMoneyCost && List.length model.stock.coffees >= devCoffeeCost then
-                    let
-                        stock =
-                            model.stock
+            ]
 
-                        newStock =
-                            { stock
-                                | balance = stock.balance - devMoneyCost
-                                , coffees = List.drop devCoffeeCost stock.coffees
-                            }
-                    in
-                    [ activeButton "RECRUIT DEV" (RecruitDevClicked newStock)
-                    , H.span [ HA.class "text-green-500 text-sm invisible" ]
-                        [ H.text <| "You need €" ++ String.fromInt devMoneyCost ++ " and " ++ String.fromInt devCoffeeCost ++ " coffees."
-                        ]
-                    ]
+        else
+            [ inactiveButton "RECRUIT DEV"
+            , H.span [ HA.class "text-green-500 text-sm" ]
+                [ H.text <| "You need €" ++ String.fromInt devMoneyCost ++ " and " ++ String.fromInt devCoffeeCost ++ " coffees."
+                ]
+            ]
 
-                else
-                    [ inactiveButton "RECRUIT DEV"
-                    , H.span [ HA.class "text-green-500 text-sm" ]
-                        [ H.text <| "You need €" ++ String.fromInt devMoneyCost ++ " and " ++ String.fromInt devCoffeeCost ++ " coffees."
-                        ]
-                    ]
+
+viewDevsCount : Int -> Html Msg
+viewDevsCount devNumber =
+    H.div [ HA.class "flex flex-col items-end leading-none font-bold mt-10 mr-8" ]
+        [ H.span [ HA.class "text-gray-500 text-sm" ] [ H.text "DEVS" ]
+        , H.span []
+            [ H.span [ HA.class "text-green-700 text-4xl" ]
+                [ H.text (String.fromInt devNumber) ]
+            , H.span [ HA.class "text-xl" ] [ H.text <| "/" ++ String.fromInt numberDevToWin ]
             ]
         ]
 
@@ -444,7 +450,7 @@ viewRecruitDev model =
 activeButton : String -> msg -> Html msg
 activeButton text msg =
     H.button
-        [ HA.class "rounded-md bg-green-600 px-5 py-2 text-green-200"
+        [ HA.class "rounded-md bg-green-600 px-10 py-2 text-green-200"
         , HE.onClick msg
         ]
         [ H.text text ]
@@ -453,7 +459,7 @@ activeButton text msg =
 inactiveButton : String -> Html msg
 inactiveButton text =
     H.button
-        [ HA.class "rounded-md bg-green-100 px-5 py-2 cursor-not-allowed text-green-500"
+        [ HA.class "rounded-md bg-green-100 px-10 py-2 cursor-not-allowed text-green-500"
         , HA.disabled True
         ]
         [ H.text text ]
@@ -468,9 +474,9 @@ viewResourceCard :
     }
     -> Html msg
 viewResourceCard r =
-    H.div [ HA.class "h-40 w-1/4 p-4" ]
+    H.div [ HA.class "h-32 p-4", HA.style "width" "18rem" ]
         [ H.div
-            [ HA.class "flex flex-row rounded-md p-10 space-x-16 shadow-xl"
+            [ HA.class "flex flex-row rounded-md p-8 space-x-8 shadow-lg"
 
             -- this way of dealing with Tailwind properties are not very good
             -- since we cannot safely "purge" the CSS file
@@ -488,8 +494,8 @@ viewResourceCard r =
 
 viewDev : Dev -> Html Msg
 viewDev dev =
-    H.div [ HA.class "w-64 px-4 pt-8" ]
-        [ H.div [ HA.class "flex flex-col space-y-4 p-4 border rounded-md h-48 shadow-md" ]
+    H.div [ HA.class "w-64 px-4 pt-4" ]
+        [ H.div [ HA.class "flex flex-col space-y-4 px-4 py-2 border rounded-md h-40 shadow-md" ]
             [ H.h2 [ HA.class "font-bold" ]
                 [ viewIcon [ HA.class "mr-4" ] "engineering"
                 , H.text <| showDevId dev.id
@@ -497,10 +503,11 @@ viewDev dev =
             , viewOrders dev
             , case dev.action of
                 Nothing ->
-                    H.text "Waiting..."
+                    H.div [ HA.class "flex flex-row justify-center" ]
+                        [ viewIcon [] "hourglass_empty" ]
 
                 Just action ->
-                    H.div [ HA.class "flex flex-row flex-grow items-center space-x-4" ]
+                    H.div [ HA.class "flex flex-row items-center space-x-4" ]
                         [ viewIcon [] <|
                             case action.kind of
                                 CreatingCoffee ->
@@ -517,8 +524,8 @@ viewDev dev =
 
                                 SellingApp _ ->
                                     "business_center"
-                        , H.div [ HA.class "rounded-full flex-grow h-4 bg-gray-200" ]
-                            [ H.div [ HA.class "bg-blue-700 h-4 rounded-full", HA.style "width" <| String.fromFloat (action.elapsedMs / action.totalMs * 100) ++ "%" ]
+                        , H.div [ HA.class "rounded-full flex-grow h-1 bg-gray-200" ]
+                            [ H.div [ HA.class "bg-blue-700 h-1 rounded-full", HA.style "width" <| String.fromFloat (action.elapsedMs / action.totalMs * 100) ++ "%" ]
                                 []
                             ]
                         ]
@@ -556,9 +563,7 @@ orderButton : { selected : Order, displayed : Order } -> Dev -> H.Html Msg
 orderButton { selected, displayed } dev =
     (if selected == displayed then
         H.button
-            [ HA.class "h-10 w-10 rounded-full bg-blue-200 px-2 py-2 text-blue-700 cursor-not-allowed"
-            , HA.disabled True
-            ]
+            [ HA.class "h-10 w-10 rounded-full bg-blue-200 px-2 py-2 text-blue-700 cursor-not-allowed" ]
 
      else
         H.button
