@@ -120,7 +120,7 @@ initFromSeed seed =
     { devs = [ initDev 1 ]
     , stock = emptyStock
     , seed = seed
-    , helpOpen = False
+    , helpOpen = True
     }
 
 
@@ -399,7 +399,10 @@ viewLeftPanel loadedModel =
         [ viewStock loadedModel.stock
         , viewDevsCount (List.length loadedModel.devs)
         , viewRecruitDev loadedModel
-        , H.button [ HA.class "mt-8 focus:outline-none", HE.onClick HelpOpen ] [ viewIcon [ HA.class "rounded-full p-6 bg-blue-200" ] "contact_support" ]
+        , H.button [ HA.class "mt-8 focus:outline-none font-bold text-gray-500", HE.onClick HelpOpen ]
+            [ H.text "READ RULES"
+            , viewIcon [ HA.class "ml-2" ] "contact_support"
+            ]
         ]
 
 
