@@ -5,6 +5,7 @@ import Browser.Events
 import Html as H exposing (Html)
 import Html.Attributes as HA
 import Html.Events as HE
+import Json.Decode
 import List
 import Process
 import Random
@@ -61,12 +62,14 @@ type ActionKind
 type Model
     = Loading
     | Loaded LoadedModel
+    | Victory LoadedModel
 
 
 type alias LoadedModel =
     { devs : List Dev
     , stock : Stock
     , seed : Random.Seed
+    , helpOpen : Bool
     }
 
 
@@ -75,6 +78,9 @@ type Msg
     | OrderClicked DevId Order
     | RecruitDevClicked Stock
     | GotNewFrame Float
+    | HelpClosed
+    | HelpOpen
+    | PlayAgainClicked
 
 
 devMoneyCost : Int
@@ -111,9 +117,10 @@ init =
 
 initFromSeed : Random.Seed -> LoadedModel
 initFromSeed seed =
-    { devs = [ initDev 2, initDev 1 ]
+    { devs = [ initDev 1 ]
     , stock = emptyStock
     , seed = seed
+    , helpOpen = False
     }
 
 
@@ -257,25 +264,37 @@ update msg model =
 
         ( _, Loaded loadedModel ) ->
             updateLoaded msg loadedModel
-                |> Tuple.mapFirst Loaded
+
+        ( PlayAgainClicked, Victory loadedModel ) ->
+            ( Loaded <| initFromSeed loadedModel.seed
+            , Cmd.none
+            )
 
         _ ->
             ( model, Cmd.none )
 
 
-updateLoaded : Msg -> LoadedModel -> ( LoadedModel, Cmd Msg )
+updateLoaded : Msg -> LoadedModel -> ( Model, Cmd Msg )
 updateLoaded msg model =
     case msg of
         OrderClicked devId order ->
-            ( { model | devs = updateDev devId (\r -> { r | order = order }) model.devs }
+            ( Loaded { model | devs = updateDev devId (\r -> { r | order = order }) model.devs }
             , Cmd.none
             )
 
         RecruitDevClicked newStock ->
-            ( { model
-                | stock = newStock
-                , devs = addDev model.devs
-              }
+            let
+                newModel =
+                    { model
+                        | stock = newStock
+                        , devs = addDev model.devs
+                    }
+            in
+            ( if List.length newModel.devs >= numberDevToWin then
+                Victory newModel
+
+              else
+                Loaded newModel
             , Cmd.none
             )
 
@@ -289,15 +308,27 @@ updateLoaded msg model =
                 ( newDevs, newStock, newSeed ) =
                     List.foldr startDevAction ( [], tempStock, model.seed ) tempDevs
             in
-            ( { model | devs = newDevs, stock = newStock, seed = newSeed }
+            ( Loaded { model | devs = newDevs, stock = newStock, seed = newSeed }
             , Cmd.none
             )
 
-        GotSeed seed ->
-            -- should not happen!
-            ( model
+        HelpClosed ->
+            ( Loaded { model | helpOpen = False }
             , Cmd.none
             )
+
+        HelpOpen ->
+            ( Loaded { model | helpOpen = True }
+            , Cmd.none
+            )
+
+        PlayAgainClicked ->
+            -- should not happen!
+            ( Loaded model, Cmd.none )
+
+        GotSeed seed ->
+            -- should not happen!
+            ( Loaded model, Cmd.none )
 
 
 updateDev : DevId -> (Dev -> Dev) -> List Dev -> List Dev
@@ -344,22 +375,79 @@ view model =
             H.text ""
 
         Loaded loadedModel ->
-            if List.length loadedModel.devs >= numberDevToWin then
-                H.div [ HA.class "font-bold text-2xl" ]
-                    [ H.text "CONGRATS!" ]
+            H.div [ HA.class "flex flex-row h-screen" ]
+                [ viewLeftPanel loadedModel
+                , viewDevs (List.reverse loadedModel.devs)
+                , if loadedModel.helpOpen then
+                    viewHelp
 
-            else
-                H.div [ HA.class "flex flex-row h-screen min-h-0" ]
-                    [ H.div [ HA.class "flex flex-col overflow-y-auto overflow-x-hidden pt-4 pb-8" ]
-                        [ viewStock loadedModel.stock
-                        , viewDevsCount (List.length loadedModel.devs)
-                        , viewRecruitDev loadedModel
-                        ]
-                    , H.div [ HA.class "flex flex-col overflow-auto flex-grow pt-4" ]
-                        [ H.div [ HA.class "flex flex-row flex-wrap pb-8" ]
-                            (List.map viewDev (List.reverse loadedModel.devs))
-                        ]
-                    ]
+                  else
+                    H.text ""
+                ]
+
+        Victory loadedModel ->
+            H.div [ HA.class "flex flex-row h-screen" ]
+                [ viewLeftPanel loadedModel
+                , viewDevs (List.reverse loadedModel.devs)
+                , viewCongrats
+                ]
+
+
+viewLeftPanel : LoadedModel -> Html Msg
+viewLeftPanel loadedModel =
+    H.div [ HA.class "flex flex-col overflow-y-auto overflow-x-hidden pt-4 pb-8 pr-2 flex-shrink-0" ]
+        [ viewStock loadedModel.stock
+        , viewDevsCount (List.length loadedModel.devs)
+        , viewRecruitDev loadedModel
+        , H.button [ HA.class "mt-8 focus:outline-none", HE.onClick HelpOpen ] [ viewIcon [ HA.class "rounded-full p-6 bg-blue-200" ] "contact_support" ]
+        ]
+
+
+viewHelp : Html Msg
+viewHelp =
+    viewModal
+        [ H.div [ HA.class "border-b border-gray-500 p-4 text-xl flex flex-row items-center" ]
+            [ H.div [ HA.class "flex-grow" ]
+                [ H.text "Coffaptory help" ]
+            , H.div []
+                [ viewIcon [ HE.onClick HelpClosed ] "close" ]
+            ]
+        , H.div
+            [ HA.class "flex flex-col px-10 py-10 overflow-auto space-y-4 max-w-2xl" ]
+            [ H.p [] [ H.text "You're gonna manage a software startup, geared by coffee! Your goal is to manage and recruit 30 developers. Each developer can:" ]
+            , H.div [ HA.class "flex flex-row items-center" ] [ viewIcon [ HA.class "mr-4" ] "local_cafe", H.text "Prepare coffee (1 sec)" ]
+            , H.div [ HA.class "flex flex-row items-center" ] [ viewIcon [ HA.class "mr-4" ] "computer", H.text "Mount a server (0.5-2.5 sec – yeah DevOps isn't a reliable science)" ]
+            , H.div [ HA.class "flex flex-row items-center" ] [ viewIcon [ HA.class "mr-4" ] "integration_instructions", H.text "Develop an app (2 sec). It demands 1 coffee and 1 server. The developer will fail to produce an app with a probability of 40% (yeah, your devs don't know elm!!!), in this case the coffee is lost but you get back the server" ]
+            , H.div [ HA.class "flex flex-row items-center" ] [ viewIcon [ HA.class "mr-4" ] "business_center", H.text "Sell between 1 and 5 apps (10 sec). Each app is sold at €1000." ]
+            ]
+        ]
+
+
+viewCongrats : Html Msg
+viewCongrats =
+    viewModal
+        [ H.div
+            [ HA.class "p-20 flex flex-col space-y-20 items-center" ]
+            [ H.div [ HA.class "p-10  text-4xl rounded-full bg-red-200 text-center" ] [ H.text " 🎉 " ]
+            , activeButton "PLAY AGAIN" PlayAgainClicked
+            ]
+        ]
+
+
+viewModal : List (Html Msg) -> Html Msg
+viewModal content =
+    H.div [ HA.class "fixed h-full w-full inset-0 flex flex-col justify-center items-center z-40" ]
+        [ H.div [ HA.class "fixed h-full w-full inset-0 bg-gray-600 opacity-25", onClickStopPropagation HelpClosed ]
+            []
+        , H.div
+            [ HA.class "border border-gray-500 flex flex-col rounded-md shadow bg-white z-50" ]
+            content
+        ]
+
+
+onClickStopPropagation : msg -> H.Attribute msg
+onClickStopPropagation toMsg =
+    HE.stopPropagationOn "click" (Json.Decode.succeed ( toMsg, True ))
 
 
 viewStock : Stock -> Html Msg
@@ -398,17 +486,6 @@ viewStock stock =
 
 viewRecruitDev : LoadedModel -> Html Msg
 viewRecruitDev model =
-    let
-        remainingDevs =
-            numberDevToWin - List.length model.devs
-
-        devStr =
-            if remainingDevs > 1 then
-                "DEVS"
-
-            else
-                "DEV"
-    in
     H.div [ HA.class "flex flex-col items-center px-4 mt-4" ] <|
         if model.stock.balance >= devMoneyCost && List.length model.stock.coffees >= devCoffeeCost then
             let
@@ -437,7 +514,7 @@ viewRecruitDev model =
 
 viewDevsCount : Int -> Html Msg
 viewDevsCount devNumber =
-    H.div [ HA.class "flex flex-col items-end leading-none font-bold mt-10 mr-8" ]
+    H.div [ HA.class "flex flex-col items-end leading-none font-bold mt-12 mr-8" ]
         [ H.span [ HA.class "text-gray-500 text-sm" ] [ H.text "DEVS" ]
         , H.span []
             [ H.span [ HA.class "text-green-700 text-4xl" ]
@@ -492,11 +569,17 @@ viewResourceCard r =
         ]
 
 
+viewDevs : List Dev -> Html Msg
+viewDevs devs =
+    H.div [ HA.class "flex flex-row content-start flex-wrap pb-8 overflow-auto" ]
+        (List.map viewDev devs)
+
+
 viewDev : Dev -> Html Msg
 viewDev dev =
-    H.div [ HA.class "w-64 px-4 pt-4" ]
+    H.div [ HA.class " w-64 px-4 pt-4" ]
         [ H.div [ HA.class "flex flex-col space-y-4 px-4 py-2 border rounded-md h-40 shadow-md" ]
-            [ H.h2 [ HA.class "font-bold" ]
+            [ H.h2 [ HA.class "font-bold flex flex-row items-center" ]
                 [ viewIcon [ HA.class "mr-4" ] "engineering"
                 , H.text <| showDevId dev.id
                 ]
@@ -614,7 +697,7 @@ showAppId (AppId devId serialNumber coffeeId serverId) =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions model =
+subscriptions _ =
     Browser.Events.onAnimationFrameDelta GotNewFrame
 
 
