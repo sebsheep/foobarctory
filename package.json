@@ -1,22 +1,22 @@
 {
-  "name": "foobarctory",
+  "name": "appctory",
   "version": "0.0.1",
   "description": "",
   "author": "Sébastien Besnier <sebastien.fabrice.besnier@gmail.com>",
   "license": "UNLICENSED",
   "scripts": {
-    "build": "elm make src/Main.elm --output=main.js --optimize",
-    "debug": "elm-live src/Main.elm --port=8000 --dir=./ -- --output=main.js --debug",
-    "live": "elm-live src/Main.elm --hot --port=8000 --dir=./ -- --output=main.js"
+    "build": "elm make src/Main.elm --output=public/main.js --optimize",
+    "debug": "elm-live src/Main.elm --port=8000 --dir=public/ -- --output=public/main.js --debug",
+    "live": "elm-live src/Main.elm --hot --port=8000 --dir=public/ -- --output=public/main.js"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sebsheep/foobarctory.git"
+    "url": "git+https://github.com/sebsheep/appctory.git"
   },
   "bugs": {
-    "url": "https://github.com/sebsheep/foobarctory/issues"
+    "url": "https://github.com/sebsheep/appctory/issues"
   },
-  "homepage": "https://github.com/sebsheep/foobarctory#readme",
+  "homepage": "https://github.com/sebsheep/appctory#readme",
   "author": "Alma",
   "license": "ISC",
   "devDependencies": {
