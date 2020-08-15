@@ -12,8 +12,8 @@ import Task
 import Tuple
 
 
-type alias Robot =
-    { id : RobotId
+type alias Dev =
+    { id : DevId
     , order : Order
     , action : Maybe Action
     , lastProduced : Int
@@ -21,26 +21,26 @@ type alias Robot =
 
 
 type Order
-    = CreateFoo
-    | CreateBar
-    | CreateFooBar
-    | SellFooBar
+    = CreateCoffee
+    | CreateServer
+    | CreateApp
+    | SellApp
 
 
-type RobotId
-    = RobotId Int
+type DevId
+    = DevId Int
 
 
-type FooId
-    = FooId RobotId Int
+type CoffeeId
+    = CoffeeId DevId Int
 
 
-type BarId
-    = BarId RobotId Int
+type ServerId
+    = ServerId DevId Int
 
 
-type FooBarId
-    = FooBarId RobotId Int FooId BarId
+type AppId
+    = AppId DevId Int CoffeeId ServerId
 
 
 type alias Action =
@@ -51,11 +51,11 @@ type alias Action =
 
 
 type ActionKind
-    = CreatingFoo
-    | CreatingBar
-    | CreatingFooBar FooId BarId
-    | FailingAtCreatingFooBar FooId BarId
-    | SellingFooBar (List FooBarId)
+    = CreatingCoffee
+    | CreatingServer
+    | CreatingApp CoffeeId ServerId
+    | FailingAtCreatingApp CoffeeId ServerId
+    | SellingApp (List AppId)
 
 
 type Model
@@ -64,7 +64,7 @@ type Model
 
 
 type alias LoadedModel =
-    { robots : List Robot
+    { devs : List Dev
     , stock : Stock
     , seed : Random.Seed
     }
@@ -72,33 +72,33 @@ type alias LoadedModel =
 
 type Msg
     = GotSeed Random.Seed
-    | OrderClicked RobotId Order
-    | BuyRobotClicked Stock
+    | OrderClicked DevId Order
+    | RecruitDevClicked Stock
     | GotNewFrame Float
 
 
-robotMoneyCost : Int
-robotMoneyCost =
-    3
+devMoneyCost : Int
+devMoneyCost =
+    3000
 
 
-robotFooCost : Int
-robotFooCost =
+devCoffeeCost : Int
+devCoffeeCost =
     6
 
 
-fooBarPrice : Int
-fooBarPrice =
-    1
+appPrice : Int
+appPrice =
+    1000
 
 
-maxSellingFoobarCount : Int
-maxSellingFoobarCount =
+maxSellingAppCount : Int
+maxSellingAppCount =
     5
 
 
-numberRobotToWin : Int
-numberRobotToWin =
+numberDevToWin : Int
+numberDevToWin =
     30
 
 
@@ -111,17 +111,17 @@ init =
 
 initFromSeed : Random.Seed -> LoadedModel
 initFromSeed seed =
-    { robots = [ initRobot 2, initRobot 1 ]
+    { devs = [ initDev 2, initDev 1 ]
     , stock = emptyStock
     , seed = seed
     }
 
 
-updateTime : Float -> Robot -> ( Robot, Stock )
-updateTime delta robot =
-    case robot.action of
+updateTime : Float -> Dev -> ( Dev, Stock )
+updateTime delta dev =
+    case dev.action of
         Nothing ->
-            ( robot, emptyStock )
+            ( dev, emptyStock )
 
         Just action ->
             let
@@ -129,122 +129,122 @@ updateTime delta robot =
                     action.elapsedMs + delta
             in
             if newElapsed > action.totalMs then
-                actionCompleted robot action.kind
+                actionCompleted dev action.kind
 
             else
-                ( { robot | action = Just { action | elapsedMs = newElapsed } }
+                ( { dev | action = Just { action | elapsedMs = newElapsed } }
                 , emptyStock
                 )
 
 
 type alias Stock =
-    { foos : List FooId
-    , bars : List BarId
-    , foobars : List FooBarId
+    { coffees : List CoffeeId
+    , servers : List ServerId
+    , apps : List AppId
     , balance : Int
     }
 
 
 merge : Stock -> Stock -> Stock
 merge a1 a2 =
-    { foos = a1.foos ++ a2.foos
-    , bars = a1.bars ++ a2.bars
-    , foobars = a1.foobars ++ a2.foobars
+    { coffees = a1.coffees ++ a2.coffees
+    , servers = a1.servers ++ a2.servers
+    , apps = a1.apps ++ a2.apps
     , balance = a1.balance + a2.balance
     }
 
 
 emptyStock : Stock
 emptyStock =
-    { foos = []
-    , bars = []
-    , foobars = []
+    { coffees = []
+    , servers = []
+    , apps = []
     , balance = 0
     }
 
 
-actionCompleted : Robot -> ActionKind -> ( Robot, Stock )
-actionCompleted robot kind =
+actionCompleted : Dev -> ActionKind -> ( Dev, Stock )
+actionCompleted dev kind =
     let
         newProduced =
-            robot.lastProduced + 1
+            dev.lastProduced + 1
 
-        newRobot =
-            { robot | lastProduced = newProduced, action = Nothing }
+        newDev =
+            { dev | lastProduced = newProduced, action = Nothing }
     in
     case kind of
-        CreatingFoo ->
-            ( newRobot, { emptyStock | foos = [ FooId robot.id newProduced ] } )
+        CreatingCoffee ->
+            ( newDev, { emptyStock | coffees = [ CoffeeId dev.id newProduced ] } )
 
-        CreatingBar ->
-            ( newRobot, { emptyStock | bars = [ BarId robot.id newProduced ] } )
+        CreatingServer ->
+            ( newDev, { emptyStock | servers = [ ServerId dev.id newProduced ] } )
 
-        CreatingFooBar fooId barId ->
-            ( newRobot, { emptyStock | foobars = [ FooBarId robot.id newProduced fooId barId ] } )
+        CreatingApp coffeeId serverId ->
+            ( newDev, { emptyStock | apps = [ AppId dev.id newProduced coffeeId serverId ] } )
 
-        FailingAtCreatingFooBar fooId barId ->
-            ( newRobot, { emptyStock | bars = [ barId ] } )
+        FailingAtCreatingApp coffeeId serverId ->
+            ( newDev, { emptyStock | servers = [ serverId ] } )
 
-        SellingFooBar foobars ->
-            ( newRobot, { emptyStock | balance = fooBarPrice * List.length foobars } )
+        SellingApp apps ->
+            ( newDev, { emptyStock | balance = appPrice * List.length apps } )
 
 
-startRobotAction : Robot -> ( List Robot, Stock, Random.Seed ) -> ( List Robot, Stock, Random.Seed )
-startRobotAction robot ( robots, stock, seed ) =
-    case robot.action of
+startDevAction : Dev -> ( List Dev, Stock, Random.Seed ) -> ( List Dev, Stock, Random.Seed )
+startDevAction dev ( devs, stock, seed ) =
+    case dev.action of
         Just _ ->
-            -- The robot already is performing an action, so don't change anything!
-            ( robot :: robots, stock, seed )
+            -- The dev already is performing an action, so don't change anything!
+            ( dev :: devs, stock, seed )
 
         Nothing ->
-            case robot.order of
-                CreateFoo ->
-                    ( { robot | action = Just { elapsedMs = 0, totalMs = 1000, kind = CreatingFoo } } :: robots
+            case dev.order of
+                CreateCoffee ->
+                    ( { dev | action = Just { elapsedMs = 0, totalMs = 1000, kind = CreatingCoffee } } :: devs
                     , stock
                     , seed
                     )
 
-                CreateBar ->
+                CreateServer ->
                     let
                         ( time, newSeed ) =
                             Random.step (Random.float 500 2500) seed
                     in
-                    ( { robot | action = Just { elapsedMs = 0, totalMs = time, kind = CreatingBar } } :: robots
+                    ( { dev | action = Just { elapsedMs = 0, totalMs = time, kind = CreatingServer } } :: devs
                     , stock
                     , newSeed
                     )
 
-                CreateFooBar ->
-                    case ( stock.foos, stock.bars ) of
-                        ( foo :: foos, bar :: bars ) ->
+                CreateApp ->
+                    case ( stock.coffees, stock.servers ) of
+                        ( coffee :: coffees, server :: servers ) ->
                             let
                                 ( success, newSeed ) =
                                     Random.step (Random.weighted ( 0.6, True ) [ ( 0.4, False ) ]) seed
 
                                 action =
                                     if success then
-                                        CreatingFooBar foo bar
+                                        CreatingApp coffee server
 
                                     else
-                                        FailingAtCreatingFooBar foo bar
+                                        FailingAtCreatingApp coffee server
                             in
-                            ( { robot | action = Just { elapsedMs = 0, totalMs = 2000, kind = action } } :: robots
-                            , { stock | foos = foos, bars = bars }
+                            ( { dev | action = Just { elapsedMs = 0, totalMs = 2000, kind = action } } :: devs
+                            , { stock | coffees = coffees, servers = servers }
                             , newSeed
                             )
 
                         _ ->
-                            ( robot :: robots, stock, seed )
+                            ( dev :: devs, stock, seed )
 
-                SellFooBar ->
-                    if not <| List.isEmpty stock.foobars then
-                        ( { robot | action = Just { elapsedMs = 0, totalMs = 10 * 1000, kind = SellingFooBar <| List.take 5 stock.foobars } } :: robots
-                        , { stock | foobars = List.drop 5 stock.foobars }
+                SellApp ->
+                    if not <| List.isEmpty stock.apps then
+                        ( { dev | action = Just { elapsedMs = 0, totalMs = 10 * 1000, kind = SellingApp <| List.take 5 stock.apps } } :: devs
+                        , { stock | apps = List.drop 5 stock.apps }
                         , seed
                         )
 
                     else
-                        ( robot :: robots, stock, seed )
+                        ( dev :: devs, stock, seed )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -266,30 +266,30 @@ update msg model =
 updateLoaded : Msg -> LoadedModel -> ( LoadedModel, Cmd Msg )
 updateLoaded msg model =
     case msg of
-        OrderClicked robotId order ->
-            ( { model | robots = updateRobot robotId (\r -> { r | order = order }) model.robots }
+        OrderClicked devId order ->
+            ( { model | devs = updateDev devId (\r -> { r | order = order }) model.devs }
             , Cmd.none
             )
 
-        BuyRobotClicked newStock ->
+        RecruitDevClicked newStock ->
             ( { model
                 | stock = newStock
-                , robots = addRobot model.robots
+                , devs = addDev model.devs
               }
             , Cmd.none
             )
 
         GotNewFrame delta ->
             let
-                ( tempRobots, tempStock ) =
-                    List.map (updateTime delta) model.robots
+                ( tempDevs, tempStock ) =
+                    List.map (updateTime delta) model.devs
                         |> List.unzip
                         |> Tuple.mapSecond (List.foldr merge model.stock)
 
-                ( newRobots, newStock, newSeed ) =
-                    List.foldr startRobotAction ( [], tempStock, model.seed ) tempRobots
+                ( newDevs, newStock, newSeed ) =
+                    List.foldr startDevAction ( [], tempStock, model.seed ) tempDevs
             in
-            ( { model | robots = newRobots, stock = newStock, seed = newSeed }
+            ( { model | devs = newDevs, stock = newStock, seed = newSeed }
             , Cmd.none
             )
 
@@ -300,34 +300,34 @@ updateLoaded msg model =
             )
 
 
-updateRobot : RobotId -> (Robot -> Robot) -> List Robot -> List Robot
-updateRobot robotId f =
+updateDev : DevId -> (Dev -> Dev) -> List Dev -> List Dev
+updateDev devId f =
     List.map
-        (\robot ->
-            if robot.id == robotId then
-                f robot
+        (\dev ->
+            if dev.id == devId then
+                f dev
 
             else
-                robot
+                dev
         )
 
 
-initRobot : Int -> Robot
-initRobot id =
-    { id = RobotId id
-    , order = CreateFoo
+initDev : Int -> Dev
+initDev id =
+    { id = DevId id
+    , order = CreateCoffee
     , action = Nothing
     , lastProduced = 0
     }
 
 
-addRobot : List Robot -> List Robot
-addRobot robots =
+addDev : List Dev -> List Dev
+addDev devs =
     let
         n =
-            List.length robots
+            List.length devs
     in
-    initRobot (n + 1) :: robots
+    initDev (n + 1) :: devs
 
 
 
@@ -344,17 +344,17 @@ view model =
             H.text ""
 
         Loaded loadedModel ->
-            if List.length loadedModel.robots >= numberRobotToWin then
+            if List.length loadedModel.devs >= numberDevToWin then
                 H.div [ HA.class "font-bold text-2xl" ]
                     [ H.text "CONGRATS!" ]
 
             else
                 H.div [ HA.class "flex flex-col pt-4 h-screen min-h-0" ]
                     [ viewStock loadedModel.stock
-                    , viewBuyRobot loadedModel
+                    , viewRecruitDev loadedModel
                     , H.div [ HA.class "flex flex-col mt-8 pt-4 overflow-auto border-t border-gray-400 flex-grow" ]
                         [ H.div [ HA.class "flex flex-row flex-wrap pb-8" ]
-                            (List.map viewRobot (List.reverse loadedModel.robots))
+                            (List.map viewDev (List.reverse loadedModel.devs))
                         ]
                     ]
 
@@ -370,71 +370,71 @@ viewStock stock =
             , value = "€" ++ String.fromInt stock.balance
             }
         , viewResourceCard
-            { iconName = "widgets"
+            { iconName = "local_cafe"
             , hardColor = "teal-700"
             , softColor = "teal-200"
-            , title = "FOO"
-            , value = String.fromInt (List.length stock.foos)
+            , title = "COFFEE"
+            , value = String.fromInt (List.length stock.coffees)
             }
         , viewResourceCard
-            { iconName = "device_hub"
+            { iconName = "computer"
             , hardColor = "red-700"
             , softColor = "red-200"
-            , title = "BAR"
-            , value = String.fromInt (List.length stock.bars)
+            , title = "SERVER"
+            , value = String.fromInt (List.length stock.servers)
             }
         , viewResourceCard
-            { iconName = "science"
+            { iconName = "integration_instructions"
             , hardColor = "green-700"
             , softColor = "green-200"
-            , title = "FOO-BAR"
-            , value = String.fromInt (List.length stock.foobars)
+            , title = "APP"
+            , value = String.fromInt (List.length stock.apps)
             }
         ]
 
 
-viewBuyRobot : LoadedModel -> Html Msg
-viewBuyRobot model =
+viewRecruitDev : LoadedModel -> Html Msg
+viewRecruitDev model =
     let
-        remainingRobots =
-            numberRobotToWin - List.length model.robots
+        remainingDevs =
+            numberDevToWin - List.length model.devs
 
-        robotStr =
-            if remainingRobots > 1 then
-                "ROBOTS"
+        devStr =
+            if remainingDevs > 1 then
+                "DEVS"
 
             else
-                "ROBOT"
+                "DEV"
     in
     H.div [ HA.class "flex flex-col items-center mt-16" ]
         [ H.div [ HA.class "flex flex-row justify-center space-x-16 items-center" ]
             [ H.div [ HA.class "flex flex-col items-end leading-none" ]
                 [ H.span [ HA.class "font-bold text-gray-500 text-sm" ] [ H.text "YOU ARE" ]
-                , H.span [ HA.class "font-bold text-green-700 text-4xl" ] [ H.text (String.fromInt remainingRobots) ]
-                , H.span [ HA.class "font-bold text-gray-500 text-sm" ] [ H.text <| robotStr ++ " AWAY FROM VICTORY" ]
+                , H.span [ HA.class "font-bold text-green-700 text-4xl" ] [ H.text (String.fromInt remainingDevs) ]
+                , H.span [ HA.class "font-bold text-gray-500 text-sm" ] [ H.text <| devStr ++ " AWAY FROM VICTORY" ]
                 ]
             , H.div [ HA.class "flex flex-col" ] <|
-                if model.stock.balance >= robotMoneyCost && List.length model.stock.foos >= robotFooCost then
+                if model.stock.balance >= devMoneyCost && List.length model.stock.coffees >= devCoffeeCost then
                     let
                         stock =
                             model.stock
 
                         newStock =
                             { stock
-                                | balance = stock.balance - robotMoneyCost
-                                , foos = List.drop robotFooCost stock.foos
+                                | balance = stock.balance - devMoneyCost
+                                , coffees = List.drop devCoffeeCost stock.coffees
                             }
                     in
-                    [ activeButton "BUY ROBOT" (BuyRobotClicked newStock)
+                    [ activeButton "RECRUIT DEV" (RecruitDevClicked newStock)
                     , H.span [ HA.class "text-green-500 text-sm invisible" ]
-                        [ H.text <| "You need €" ++ String.fromInt robotMoneyCost ++ " and " ++ String.fromInt robotFooCost ++ " foos."
+                        [ H.text <| "You need €" ++ String.fromInt devMoneyCost ++ " and " ++ String.fromInt devCoffeeCost ++ " coffees."
                         ]
                     ]
 
                 else
-                    [ inactiveButton "BUY ROBOT"
+                    [ inactiveButton "RECRUIT DEV"
                     , H.span [ HA.class "text-green-500 text-sm" ]
-                        [ H.text <| "You need €" ++ String.fromInt robotMoneyCost ++ " and " ++ String.fromInt robotFooCost ++ " foos."
+                        [ H.text <| "You need €" ++ String.fromInt devMoneyCost ++ " and " ++ String.fromInt devCoffeeCost ++ " coffees."
                         ]
                     ]
             ]
@@ -486,82 +486,101 @@ viewResourceCard r =
         ]
 
 
-viewRobot : Robot -> Html Msg
-viewRobot robot =
-    H.div [ HA.class "w-1/4 px-4 pt-8" ]
+viewDev : Dev -> Html Msg
+viewDev dev =
+    H.div [ HA.class "w-64 px-4 pt-8" ]
         [ H.div [ HA.class "flex flex-col space-y-4 p-4 border rounded-md h-48 shadow-md" ]
             [ H.h2 [ HA.class "font-bold" ]
-                [ H.text <| "Foobarer n°" ++ showRobotId robot.id ]
-            , viewOrders robot
-            , case robot.action of
+                [ viewIcon [ HA.class "mr-4" ] "engineering"
+                , H.text <| showDevId dev.id
+                ]
+            , viewOrders dev
+            , case dev.action of
                 Nothing ->
                     H.text "Waiting..."
 
                 Just action ->
-                    case action.kind of
-                        CreatingFoo ->
-                            H.text "Mining Foo..."
+                    H.div [ HA.class "flex flex-row flex-grow items-center space-x-4" ]
+                        [ viewIcon [] <|
+                            case action.kind of
+                                CreatingCoffee ->
+                                    "local_cafe"
 
-                        CreatingBar ->
-                            H.text <| "Mining bar..."
+                                CreatingServer ->
+                                    "computer"
 
-                        CreatingFooBar fooId barId ->
-                            H.text <| "Creating foobar from " ++ showFooId fooId ++ " and " ++ showBarId barId ++ "..."
+                                CreatingApp _ _ ->
+                                    "integration_instructions"
 
-                        FailingAtCreatingFooBar fooId barId ->
-                            H.text <| "Creating foobar from " ++ showFooId fooId ++ " and " ++ showBarId barId ++ "..."
+                                FailingAtCreatingApp _ _ ->
+                                    "integration_instructions"
 
-                        SellingFooBar fooBars ->
-                            H.text <| "Selling foobars: " ++ String.join "," (List.map showFooBarId fooBars) ++ "..."
+                                SellingApp _ ->
+                                    "business_center"
+                        , H.div [ HA.class "rounded-full flex-grow h-4 bg-gray-200" ]
+                            [ H.div [ HA.class "bg-blue-700 h-4 rounded-full", HA.style "width" <| String.fromFloat (action.elapsedMs / action.totalMs * 100) ++ "%" ]
+                                []
+                            ]
+                        ]
             ]
         ]
 
 
-viewOrders : Robot -> Html Msg
-viewOrders robot =
-    H.div [ HA.class "flex flex-row flex wrap justify-around space-x-2 space-y-2" ]
+viewOrders : Dev -> Html Msg
+viewOrders dev =
+    H.div [ HA.class "flex flex-row justify-around" ]
         [ orderButton
-            { selected = robot.order
-            , displayed = CreateFoo
+            { selected = dev.order
+            , displayed = CreateCoffee
             }
-            robot
-            "MINE FOO"
+            dev
         , orderButton
-            { selected = robot.order
-            , displayed = CreateBar
+            { selected = dev.order
+            , displayed = CreateServer
             }
-            robot
-            "MINE BAR"
+            dev
         , orderButton
-            { selected = robot.order
-            , displayed = CreateFooBar
+            { selected = dev.order
+            , displayed = CreateApp
             }
-            robot
-            "BUILD FOOBAR"
+            dev
         , orderButton
-            { selected = robot.order
-            , displayed = SellFooBar
+            { selected = dev.order
+            , displayed = SellApp
             }
-            robot
-            "SELL FOOBAR"
+            dev
         ]
 
 
-orderButton : { selected : Order, displayed : Order } -> Robot -> String -> H.Html Msg
-orderButton { selected, displayed } robot name =
-    if selected == displayed then
+orderButton : { selected : Order, displayed : Order } -> Dev -> H.Html Msg
+orderButton { selected, displayed } dev =
+    (if selected == displayed then
         H.button
-            [ HA.class "rounded-md bg-blue-600 px-5 py-2 text-blue-200 cursor-not-allowed"
+            [ HA.class "h-10 w-10 rounded-full bg-blue-200 px-2 py-2 text-blue-700 cursor-not-allowed"
             , HA.disabled True
             ]
-            [ H.text name ]
 
-    else
+     else
         H.button
-            [ HA.class "rounded-md bg-blue-100 px-5 py-2 text-blue-500"
-            , HE.onClick (OrderClicked robot.id displayed)
+            [ HA.class "h-10 w-10 rounded-full bg-blue-200 px-2 py-2 text-white"
+            , HE.onClick (OrderClicked dev.id displayed)
             ]
-            [ H.text name ]
+    )
+    <|
+        [ viewIcon [] <|
+            case displayed of
+                CreateCoffee ->
+                    "local_cafe"
+
+                CreateServer ->
+                    "computer"
+
+                CreateApp ->
+                    "integration_instructions"
+
+                SellApp ->
+                    "business_center"
+        ]
 
 
 viewIcon : List (H.Attribute msg) -> String -> Html msg
@@ -569,24 +588,24 @@ viewIcon attrs name =
     H.i (HA.class "material-icons" :: attrs) [ H.text name ]
 
 
-showRobotId : RobotId -> String
-showRobotId (RobotId id) =
+showDevId : DevId -> String
+showDevId (DevId id) =
     String.fromInt id
 
 
-showFooId : FooId -> String
-showFooId (FooId robotId serialNumber) =
-    "F-" ++ showRobotId robotId ++ "-" ++ String.fromInt serialNumber
+showCoffeeId : CoffeeId -> String
+showCoffeeId (CoffeeId devId serialNumber) =
+    "C-" ++ showDevId devId ++ "-" ++ String.fromInt serialNumber
 
 
-showBarId : BarId -> String
-showBarId (BarId robotId serialNumber) =
-    "B-" ++ showRobotId robotId ++ "-" ++ String.fromInt serialNumber
+showServerId : ServerId -> String
+showServerId (ServerId devId serialNumber) =
+    "S-" ++ showDevId devId ++ "-" ++ String.fromInt serialNumber
 
 
-showFooBarId : FooBarId -> String
-showFooBarId (FooBarId robotId _ fooId barId) =
-    "FB-" ++ showRobotId robotId ++ "-" ++ showFooId fooId ++ "-" ++ showBarId barId
+showAppId : AppId -> String
+showAppId (AppId devId serialNumber coffeeId serverId) =
+    "CS-" ++ showDevId devId ++ "-" ++ String.fromInt serialNumber ++ "-" ++ showCoffeeId coffeeId ++ "-" ++ showServerId serverId
 
 
 subscriptions : Model -> Sub Msg
