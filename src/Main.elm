@@ -1,5 +1,6 @@
 port module Main exposing (main)
 
+import Array exposing (empty)
 import Browser
 import Browser.Events
 import Html as H exposing (Html)
@@ -467,7 +468,7 @@ viewBoard loadedModel =
 viewLeftPanel : LoadedModel -> Html Msg
 viewLeftPanel loadedModel =
     H.div [ HA.class "flex flex-col overflow-y-auto overflow-x-hidden pt-4 pb-8 pr-2 flex-shrink-0" ]
-        [ viewStock loadedModel.stock
+        [ viewStock loadedModel
         , viewDevsCountAndTime loadedModel
         , viewRecruitDev loadedModel
         , H.button [ HA.class "mt-8 focus:outline-none font-bold text-gray-500", HE.onClick HelpOpen ]
@@ -557,36 +558,69 @@ onClickStopPropagation toMsg =
     HE.stopPropagationOn "click" (Json.Decode.succeed ( toMsg, True ))
 
 
-viewStock : Stock -> Html Msg
-viewStock stock =
+processedStock : Dev -> Stock
+processedStock dev =
+    case dev.action of
+        Nothing ->
+            emptyStock
+
+        Just action ->
+            case action.kind of
+                CreatingCoffee ->
+                    emptyStock
+
+                CreatingServer ->
+                    emptyStock
+
+                CreatingApp coffeeId serverId ->
+                    { emptyStock | coffees = [ coffeeId ], servers = [ serverId ] }
+
+                FailingAtCreatingApp coffeeId serverId ->
+                    { emptyStock | coffees = [ coffeeId ], servers = [ serverId ] }
+
+                SellingApp apps ->
+                    { emptyStock | apps = apps }
+
+
+viewStock : LoadedModel -> Html Msg
+viewStock loadedModel =
+    let
+        processed =
+            loadedModel.devs
+                |> List.foldr (processedStock >> merge) emptyStock
+    in
     H.div [ HA.class "flex flex-col space-y-8" ]
         [ viewResourceCard
             { iconName = "euro_symbol"
             , hardColor = "yellow-700"
             , softColor = "yellow-200"
             , title = "MONEY"
-            , value = "€" ++ String.fromInt stock.balance
+            , value = "€" ++ String.fromInt loadedModel.stock.balance
+            , subValue = 0
             }
         , viewResourceCard
             { iconName = "local_cafe"
             , hardColor = "orange-700"
             , softColor = "orange-200"
             , title = "COFFEE"
-            , value = String.fromInt (List.length stock.coffees)
+            , value = String.fromInt (List.length loadedModel.stock.coffees)
+            , subValue = List.length processed.coffees
             }
         , viewResourceCard
             { iconName = "computer"
             , hardColor = "teal-700"
             , softColor = "teal-200"
             , title = "SERVER"
-            , value = String.fromInt (List.length stock.servers)
+            , value = String.fromInt (List.length loadedModel.stock.servers)
+            , subValue = List.length processed.servers
             }
         , viewResourceCard
             { iconName = "integration_instructions"
             , hardColor = "green-700"
             , softColor = "green-200"
             , title = "APP"
-            , value = String.fromInt (List.length stock.apps)
+            , value = String.fromInt (List.length loadedModel.stock.apps)
+            , subValue = List.length processed.apps
             }
         ]
 
@@ -660,6 +694,7 @@ viewResourceCard :
     , softColor : String
     , title : String
     , value : String
+    , subValue : Int
     }
     -> Html msg
 viewResourceCard r =
@@ -675,7 +710,17 @@ viewResourceCard r =
             [ viewIcon [ HA.class <| "rounded-full text-white p-6 bg-" ++ r.hardColor ] r.iconName
             , H.div [ HA.class "flex flex-col mt-4" ]
                 [ H.div [ HA.class "text-gray-600 font-bold text-sm" ] [ H.text r.title ]
-                , H.div [ HA.class "font-bold text-2xl" ] [ H.text r.value ]
+                , H.div [ HA.class "flex flex-row items-baseline" ]
+                    [ H.div [ HA.class "font-bold text-2xl" ] [ H.text r.value ]
+                    , if r.subValue > 0 then
+                        H.div [ HA.class "font-bold text text-gray-600" ]
+                            [ H.span [ HA.class "ml-2 mr-1" ] [ H.text "+" ]
+                            , H.text <| String.fromInt r.subValue
+                            ]
+
+                      else
+                        H.text ""
+                    ]
                 ]
             ]
         ]
