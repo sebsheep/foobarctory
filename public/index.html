@@ -30,7 +30,10 @@
         });
 
         app.ports.getBestTime.subscribe(function () {
-            app.ports.bestTimeFromJs.send(parseFloat(localStorage.getItem('bestTime')));
+            var maybeBestTime = localStorage.getItem('bestTime');
+            var bestTime = maybeBestTime === null ? null : parseFloat(maybeBestTime);
+
+            app.ports.bestTimeFromJs.send(bestTime);
         });
 
         app.ports.setBestTime.subscribe(function (bestTime) {
