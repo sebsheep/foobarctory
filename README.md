@@ -1,6 +1,6 @@
 # The easy way
 
-Go to: [https://ellie-app.com/9G7vRxK62Kwa1](https://ellie-app.com/9G7vRxK62Kwa1) and play (with the game and the code :) )
+Go to: [https://coffaptory.netlify.app/](https://coffaptory.netlify.app/) and play!
 
 # The handy way
 
