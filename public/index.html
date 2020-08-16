@@ -6,6 +6,20 @@
     <script src="main.js"></script>
     <link href="https://unpkg.com/tailwindcss@^1.0/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        @keyframes zoom {
+            0% {
+                transform: scale(0.9);
+            }
+
+            100% {
+                transform: scale(1);
+            }
+
+        }
+    </style>
+
+
 </head>
 
 <body>
@@ -14,6 +28,15 @@
         var app = Elm.Main.init({
             node: document.getElementById('myapp')
         });
+
+        app.ports.getBestTime.subscribe(function () {
+            app.ports.bestTimeFromJs.send(parseFloat(localStorage.getItem('bestTime')));
+        });
+
+        app.ports.setBestTime.subscribe(function (bestTime) {
+            localStorage.setItem('bestTime', bestTime);
+        });
+
     </script>
 </body>
 

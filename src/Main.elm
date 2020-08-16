@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 import Browser
 import Browser.Events
@@ -11,6 +11,15 @@ import Process
 import Random
 import Task
 import Tuple
+
+
+port getBestTime : () -> Cmd msg
+
+
+port bestTimeFromJs : (Maybe Float -> msg) -> Sub msg
+
+
+port setBestTime : Float -> Cmd msg
 
 
 type alias Dev =
@@ -62,7 +71,8 @@ type ActionKind
 type Model
     = Loading
     | Loaded LoadedModel
-    | Victory LoadedModel
+    | VictoryWaitingBestTime LoadedModel
+    | VictoryWithBestTime LoadedModel (Maybe Float)
 
 
 type alias LoadedModel =
@@ -70,6 +80,7 @@ type alias LoadedModel =
     , stock : Stock
     , seed : Random.Seed
     , helpOpen : Bool
+    , elapsedTime : Float
     }
 
 
@@ -80,7 +91,8 @@ type Msg
     | GotNewFrame Float
     | HelpClosed
     | HelpOpen
-    | PlayAgainClicked
+    | GotBestTime (Maybe Float)
+    | ImproveMyTimeClicked
 
 
 devMoneyCost : Int
@@ -120,7 +132,18 @@ initFromSeed seed =
     { devs = [ initDev 1 ]
     , stock = emptyStock
     , seed = seed
+    , helpOpen = False
+    , elapsedTime = 0
+    }
+
+
+initFromSeedWithHelp : Random.Seed -> LoadedModel
+initFromSeedWithHelp seed =
+    { devs = [ initDev 1 ]
+    , stock = emptyStock
+    , seed = seed
     , helpOpen = True
+    , elapsedTime = 0
     }
 
 
@@ -258,14 +281,28 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
         ( GotSeed seed, Loading ) ->
-            ( Loaded <| initFromSeed seed
+            ( Loaded <| initFromSeedWithHelp seed
             , Cmd.none
             )
 
         ( _, Loaded loadedModel ) ->
             updateLoaded msg loadedModel
 
-        ( PlayAgainClicked, Victory loadedModel ) ->
+        ( GotBestTime maybeTime, VictoryWaitingBestTime loadedModel ) ->
+            ( VictoryWithBestTime loadedModel maybeTime
+            , case maybeTime of
+                Just time ->
+                    if loadedModel.elapsedTime < time then
+                        setBestTime loadedModel.elapsedTime
+
+                    else
+                        Cmd.none
+
+                Nothing ->
+                    setBestTime loadedModel.elapsedTime
+            )
+
+        ( ImproveMyTimeClicked, VictoryWithBestTime loadedModel _ ) ->
             ( Loaded <| initFromSeed loadedModel.seed
             , Cmd.none
             )
@@ -290,13 +327,11 @@ updateLoaded msg model =
                         , devs = addDev model.devs
                     }
             in
-            ( if List.length newModel.devs >= numberDevToWin then
-                Victory newModel
+            if List.length newModel.devs >= numberDevToWin then
+                ( VictoryWaitingBestTime newModel, getBestTime () )
 
-              else
-                Loaded newModel
-            , Cmd.none
-            )
+            else
+                ( Loaded newModel, Cmd.none )
 
         GotNewFrame delta ->
             let
@@ -308,7 +343,7 @@ updateLoaded msg model =
                 ( newDevs, newStock, newSeed ) =
                     List.foldr startDevAction ( [], tempStock, model.seed ) tempDevs
             in
-            ( Loaded { model | devs = newDevs, stock = newStock, seed = newSeed }
+            ( Loaded { model | devs = newDevs, stock = newStock, seed = newSeed, elapsedTime = model.elapsedTime + delta }
             , Cmd.none
             )
 
@@ -322,11 +357,15 @@ updateLoaded msg model =
             , Cmd.none
             )
 
-        PlayAgainClicked ->
+        ImproveMyTimeClicked ->
             -- should not happen!
             ( Loaded model, Cmd.none )
 
         GotSeed seed ->
+            -- should not happen!
+            ( Loaded model, Cmd.none )
+
+        GotBestTime _ ->
             -- should not happen!
             ( Loaded model, Cmd.none )
 
@@ -375,9 +414,8 @@ view model =
             H.text ""
 
         Loaded loadedModel ->
-            H.div [ HA.class "flex flex-row h-screen" ]
-                [ viewLeftPanel loadedModel
-                , viewDevs (List.reverse loadedModel.devs)
+            H.div []
+                [ viewBoard loadedModel
                 , if loadedModel.helpOpen then
                     viewHelp
 
@@ -385,19 +423,52 @@ view model =
                     H.text ""
                 ]
 
-        Victory loadedModel ->
-            H.div [ HA.class "flex flex-row h-screen" ]
-                [ viewLeftPanel loadedModel
-                , viewDevs (List.reverse loadedModel.devs)
-                , viewCongrats
+        VictoryWaitingBestTime loadedModel ->
+            H.div []
+                [ viewBoard loadedModel
                 ]
+
+        VictoryWithBestTime loadedModel maybeTime ->
+            H.div []
+                [ viewBoard loadedModel
+                , viewCongrats loadedModel maybeTime
+                ]
+
+
+msToHHMMSS : Float -> String
+msToHHMMSS ms =
+    let
+        s =
+            ceiling (ms / 1000)
+
+        minute =
+            s // 60
+
+        second =
+            remainderBy 60 s
+
+        pad : String -> String
+        pad =
+            String.pad 2 '0'
+    in
+    (String.fromInt minute |> pad)
+        ++ ":"
+        ++ (String.fromInt second |> pad)
+
+
+viewBoard : LoadedModel -> Html Msg
+viewBoard loadedModel =
+    H.div [ HA.class "flex flex-row h-screen" ]
+        [ viewLeftPanel loadedModel
+        , viewDevs (List.reverse loadedModel.devs)
+        ]
 
 
 viewLeftPanel : LoadedModel -> Html Msg
 viewLeftPanel loadedModel =
     H.div [ HA.class "flex flex-col overflow-y-auto overflow-x-hidden pt-4 pb-8 pr-2 flex-shrink-0" ]
         [ viewStock loadedModel.stock
-        , viewDevsCount (List.length loadedModel.devs)
+        , viewDevsCountAndTime loadedModel
         , viewRecruitDev loadedModel
         , H.button [ HA.class "mt-8 focus:outline-none font-bold text-gray-500", HE.onClick HelpOpen ]
             [ H.text "READ RULES"
@@ -413,11 +484,11 @@ viewHelp =
             [ H.div [ HA.class "flex-grow" ]
                 [ H.text "Coffaptory help" ]
             , H.div []
-                [ viewIcon [ HE.onClick HelpClosed ] "close" ]
+                [ viewIcon [ HE.onClick HelpClosed, HA.class "cursor-pointer select-none" ] "close" ]
             ]
         , H.div
             [ HA.class "flex flex-col px-10 py-10 overflow-auto space-y-4 max-w-2xl" ]
-            [ H.p [] [ H.text "You're gonna manage a software startup, geared by coffee! Your goal is to manage and recruit 30 developers. Each developer can:" ]
+            [ H.p [] [ H.text "You're gonna manage a software startup, geared by coffee! Your goal is to recruit 30 developers as fast  as possible. Each developer can:" ]
             , H.div [ HA.class "flex flex-row items-center" ] [ viewIcon [ HA.class "mr-4" ] "local_cafe", H.text "Prepare coffee (1 sec)" ]
             , H.div [ HA.class "flex flex-row items-center" ] [ viewIcon [ HA.class "mr-4" ] "computer", H.text "Mount a server (0.5-2.5 sec – yeah DevOps isn't a reliable science)" ]
             , H.div [ HA.class "flex flex-row items-center" ] [ viewIcon [ HA.class "mr-4" ] "integration_instructions", H.text "Develop an app (2 sec). It demands 1 coffee and 1 server. The developer will fail to produce an app with a probability of 40% (yeah, your devs don't know elm!!!), in this case the coffee is lost but you get back the server" ]
@@ -426,15 +497,48 @@ viewHelp =
         ]
 
 
-viewCongrats : Html Msg
-viewCongrats =
-    viewModal
-        [ H.div
-            [ HA.class "p-20 flex flex-col space-y-20 items-center" ]
-            [ H.div [ HA.class "p-10  text-4xl rounded-full bg-red-200 text-center" ] [ H.text " 🎉 " ]
-            , activeButton "PLAY AGAIN" PlayAgainClicked
-            ]
-        ]
+viewCongrats : LoadedModel -> Maybe Float -> Html Msg
+viewCongrats loadedModel maybeTime =
+    viewModal <|
+        case maybeTime of
+            Just time ->
+                if loadedModel.elapsedTime < time then
+                    [ H.div
+                        [ HA.class "p-20 flex flex-col space-y-10 items-center" ]
+                        [ H.div [ HA.class "w-24 h-24 text-4xl rounded-full bg-green-200 flex flex-col items-center justify-center" ]
+                            -- tada emoji
+                            [ H.text "🎉" ]
+                        , H.div [ HA.class "font-bold text-2xl-text-green-700" ] [ H.text "NEW BEST TIME!" ]
+                        , H.div [ HA.class "font-bold text-green-700 text-6xl" ] [ H.text <| msToHHMMSS loadedModel.elapsedTime ]
+                        , H.div [ HA.class "font-bold text-gray-600" ] [ H.text <| "Previous best time: " ++ msToHHMMSS time ]
+                        , H.div [ HA.class "text-sm" ] [ activeButton "IMPROVE MY TIME!" ImproveMyTimeClicked ]
+                        ]
+                    ]
+
+                else
+                    [ H.div
+                        [ HA.class "p-20 flex flex-col space-y-10 items-center" ]
+                        [ H.div [ HA.class "w-24 h-24 text-4xl rounded-full bg-gray-200 flex flex-col items-center justify-center" ]
+                            -- frowning face emoji
+                            [ H.text "🙁" ]
+                        , H.div [ HA.class "font-bold text-2xl-text-green-700" ] [ H.text "BEST TIME NOT IMPROVED!" ]
+                        , H.div [ HA.class "font-bold text-red-700 text-6xl" ] [ H.text <| msToHHMMSS loadedModel.elapsedTime ]
+                        , H.div [ HA.class "font-bold text-gray-600" ] [ H.text <| "Current best time: " ++ msToHHMMSS time ]
+                        , H.div [ HA.class "text-sm" ] [ activeButton "IMPROVE MY TIME!" ImproveMyTimeClicked ]
+                        ]
+                    ]
+
+            Nothing ->
+                [ H.div
+                    [ HA.class "p-20 flex flex-col space-y-10 items-center" ]
+                    [ H.div [ HA.class "w-24 h-24 text-4xl rounded-full bg-green-200 flex flex-col items-center justify-center" ]
+                        -- tada emoji
+                        [ H.text "🎉" ]
+                    , H.div [ HA.class "font-bold text-2xl-text-green-700" ] [ H.text "NEW BEST TIME!" ]
+                    , H.div [ HA.class "font-bold text-green-700 text-6xl" ] [ H.text <| msToHHMMSS loadedModel.elapsedTime ]
+                    , H.div [ HA.class "text-sm" ] [ activeButton "IMPROVE MY TIME!" ImproveMyTimeClicked ]
+                    ]
+                ]
 
 
 viewModal : List (Html Msg) -> Html Msg
@@ -465,15 +569,15 @@ viewStock stock =
             }
         , viewResourceCard
             { iconName = "local_cafe"
-            , hardColor = "teal-700"
-            , softColor = "teal-200"
+            , hardColor = "orange-700"
+            , softColor = "orange-200"
             , title = "COFFEE"
             , value = String.fromInt (List.length stock.coffees)
             }
         , viewResourceCard
             { iconName = "computer"
-            , hardColor = "red-700"
-            , softColor = "red-200"
+            , hardColor = "teal-700"
+            , softColor = "teal-200"
             , title = "SERVER"
             , value = String.fromInt (List.length stock.servers)
             }
@@ -515,14 +619,19 @@ viewRecruitDev model =
             ]
 
 
-viewDevsCount : Int -> Html Msg
-viewDevsCount devNumber =
-    H.div [ HA.class "flex flex-col items-end leading-none font-bold mt-12 mr-8" ]
-        [ H.span [ HA.class "text-gray-500 text-sm" ] [ H.text "DEVS" ]
-        , H.span []
-            [ H.span [ HA.class "text-green-700 text-4xl" ]
-                [ H.text (String.fromInt devNumber) ]
-            , H.span [ HA.class "text-xl" ] [ H.text <| "/" ++ String.fromInt numberDevToWin ]
+viewDevsCountAndTime : LoadedModel -> Html Msg
+viewDevsCountAndTime loadedModel =
+    H.div [ HA.class "flex flex-row justify-between leading-none font-bold items-end mt-12 mx-8" ]
+        [ H.div [ HA.class "font-bold text-gray-700 text-2xl" ]
+            [ H.text <| msToHHMMSS loadedModel.elapsedTime
+            ]
+        , H.div [ HA.class "flex flex-col" ]
+            [ H.span [ HA.class "text-gray-500 text-sm" ] [ H.text "DEVS" ]
+            , H.span []
+                [ H.span [ HA.class "text-green-700 text-3xl" ]
+                    [ H.text (String.fromInt <| List.length loadedModel.devs) ]
+                , H.span [ HA.class "text-xl" ] [ H.text <| "/" ++ String.fromInt numberDevToWin ]
+                ]
             ]
         ]
 
@@ -574,13 +683,13 @@ viewResourceCard r =
 
 viewDevs : List Dev -> Html Msg
 viewDevs devs =
-    H.div [ HA.class "flex flex-row content-start flex-wrap pb-8 overflow-auto" ]
+    H.div [ HA.class "flex flex-row content-start flex-wrap pt-4 pb-8 overflow-auto" ]
         (List.map viewDev devs)
 
 
 viewDev : Dev -> Html Msg
 viewDev dev =
-    H.div [ HA.class " w-64 px-4 pt-4" ]
+    H.div [ HA.class " w-64 px-4 pt-4 select-none" ]
         [ H.div [ HA.class "flex flex-col space-y-4 px-4 py-2 border rounded-md h-40 shadow-md" ]
             [ H.h2 [ HA.class "font-bold flex flex-row items-center" ]
                 [ viewIcon [ HA.class "mr-4" ] "engineering"
@@ -590,7 +699,16 @@ viewDev dev =
             , case dev.action of
                 Nothing ->
                     H.div [ HA.class "flex flex-row justify-center" ]
-                        [ viewIcon [] "hourglass_empty" ]
+                        [ H.img
+                            [ HA.style "animation-duration" "2s"
+                            , HA.style "animation-direction" "alternate"
+                            , HA.style "animation-iteration-count" "infinite"
+                            , HA.style "animation-name" "zoom"
+                            , HA.class "w-10 h-10"
+                            , HA.src "/image/sleeping.svg"
+                            ]
+                            []
+                        ]
 
                 Just action ->
                     H.div [ HA.class "flex flex-row items-center space-x-4" ]
@@ -649,11 +767,11 @@ orderButton : { selected : Order, displayed : Order } -> Dev -> H.Html Msg
 orderButton { selected, displayed } dev =
     (if selected == displayed then
         H.button
-            [ HA.class "h-10 w-10 rounded-full bg-blue-200 px-2 py-2 text-blue-700 cursor-not-allowed" ]
+            [ HA.class "h-10 w-10 rounded-full focus:outline-none bg-blue-200 px-2 py-2 text-blue-700 cursor-not-allowed" ]
 
      else
         H.button
-            [ HA.class "h-10 w-10 rounded-full bg-blue-200 px-2 py-2 text-white"
+            [ HA.class "h-10 w-10 rounded-full focus:outline-none bg-blue-200 px-2 py-2 text-white"
             , HE.onClick (OrderClicked dev.id displayed)
             ]
     )
@@ -701,7 +819,10 @@ showAppId (AppId devId serialNumber coffeeId serverId) =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Browser.Events.onAnimationFrameDelta GotNewFrame
+    Sub.batch
+        [ Browser.Events.onAnimationFrameDelta GotNewFrame
+        , bestTimeFromJs GotBestTime
+        ]
 
 
 main : Program () Model Msg
