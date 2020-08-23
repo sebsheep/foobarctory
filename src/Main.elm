@@ -82,6 +82,7 @@ type alias LoadedModel =
     , seed : Random.Seed
     , helpOpen : Bool
     , elapsedTime : Float
+    , appsCreated : Int
     }
 
 
@@ -135,17 +136,17 @@ initFromSeed seed =
     , seed = seed
     , helpOpen = False
     , elapsedTime = 0
+    , appsCreated = 0
     }
 
 
 initFromSeedWithHelp : Random.Seed -> LoadedModel
 initFromSeedWithHelp seed =
-    { devs = [ initDev 1 ]
-    , stock = emptyStock
-    , seed = seed
-    , helpOpen = True
-    , elapsedTime = 0
-    }
+    let
+        model =
+            initFromSeed seed
+    in
+    { model | helpOpen = True }
 
 
 updateTime : Float -> Dev -> ( Dev, Stock )
@@ -220,8 +221,8 @@ actionCompleted dev kind =
             ( newDev, { emptyStock | balance = appPrice * List.length apps } )
 
 
-startDevAction : Dev -> ( List Dev, Stock, Random.Seed ) -> ( List Dev, Stock, Random.Seed )
-startDevAction dev ( devs, stock, seed ) =
+startDevAction : { appAlwaysSucceed : Bool } -> Dev -> ( List Dev, Stock, Random.Seed ) -> ( List Dev, Stock, Random.Seed )
+startDevAction conf dev ( devs, stock, seed ) =
     case dev.action of
         Just _ ->
             -- The dev already is performing an action, so don't change anything!
@@ -250,7 +251,11 @@ startDevAction dev ( devs, stock, seed ) =
                         ( coffee :: coffees, server :: servers ) ->
                             let
                                 ( success, newSeed ) =
-                                    Random.step (Random.weighted ( 0.6, True ) [ ( 0.4, False ) ]) seed
+                                    if conf.appAlwaysSucceed then
+                                        ( True, seed )
+
+                                    else
+                                        Random.step (Random.weighted ( 0.6, True ) [ ( 0.4, False ) ]) seed
 
                                 action =
                                     if success then
@@ -341,10 +346,23 @@ updateLoaded msg model =
                         |> List.unzip
                         |> Tuple.mapSecond (List.foldr merge model.stock)
 
+                newAppsCreated =
+                    model.appsCreated + List.length tempStock.apps
+
                 ( newDevs, newStock, newSeed ) =
-                    List.foldr startDevAction ( [], tempStock, model.seed ) tempDevs
+                    List.foldr
+                        (startDevAction { appAlwaysSucceed = newAppsCreated < 3 })
+                        ( [], tempStock, model.seed )
+                        tempDevs
             in
-            ( Loaded { model | devs = newDevs, stock = newStock, seed = newSeed, elapsedTime = model.elapsedTime + delta }
+            ( Loaded
+                { model
+                    | devs = newDevs
+                    , stock = newStock
+                    , seed = newSeed
+                    , elapsedTime = model.elapsedTime + delta
+                    , appsCreated = newAppsCreated
+                }
             , Cmd.none
             )
 
